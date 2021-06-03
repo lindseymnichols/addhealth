@@ -1,0 +1,94 @@
+---
+title: "HLMII Final Project"
+author: "Lindsey Nichols"
+date: "5/18/2021"
+output: html_document
+---
+
+
+
+
+```{r merge data}
+
+library(here)
+library(rio)
+library(tidyverse)
+library(psych)
+
+
+w1<- import(here("Add Health", "raw data", "ICPSR_21600", "DS0001", "21600-0001-Data.rda"))
+w2<- import(here("Add Health", "raw data", "ICPSR_21600 2", "DS0005", "21600-0005-Data.rda"))
+w3<- import(here("Add Health", "raw data", "ICPSR_21600 3", "DS0008", "21600-0008-Data.rda"))
+w4<- import(here("Add Health", "raw data", "ICPSR_21600 4", "DS0022", "21600-0022-Data.rda"))
+
+w1 <- w1 %>%
+  select(AID,
+         H1GI8,
+         H1GI20,
+    H1TO14, H1TO15, H1TO16,
+     H1TO20:H1TO24,
+    H1TO40, H1TO51, H1TO52) %>%
+   rename(race = H1GI8,
+         w1_grade = H1GI20,
+         w1_agefirstdrink = H1TO14, 
+         w1_pastyralcusedays = H1TO15, 
+         w1_drinksoccasion = H1TO16,
+         w1_parentprobs = H1TO20,
+         w1_schoolprobs = H1TO21,
+         w1_friendprobs = H1TO22,
+         w1_dateprobs = H1TO23,
+         w1_regrets = H1TO24,
+    w1_agefirstdrug = H1TO40, 
+    w1_accessalc = H1TO51, 
+    w1_accessdrug = H1TO52)
+  
+
+w3<- w3 %>%
+  select(AID,
+         H3TO38, 
+         ##nonprescription drug use 
+         H3TO105A:H3TO105E) %>%
+  rename(w3_pastyralcusedays = H3TO38, 
+         w3_sedative = H3TO105A,
+         w3_tranquil = H3TO105B,
+         w3_stimul = H3TO105C,
+         w3_painkill = H3TO105D,
+         w3_steroid = H3TO105E)
+
+w4 <- w4 %>%
+  select(AID,
+         H4OD1Y,
+         H4TO35, 
+         H4TO63) %>%
+  rename(w4_pastyralcusedays = H4TO35,
+         w4_nmpdu = H4TO63)
+
+
+newdata<- merge(w1, w3, by= "AID")
+dtotal <- merge(newdata, w4, by= "AID")
+
+
+dtotal<- dtotal %>%
+  mutate(w1_age = 1995-H4OD1Y,
+         w3_age = 2001-H4OD1Y,
+         w4_age = 2008-H4OD1Y)
+
+head(dtotal)
+
+```
+##removed wave 2 from analyses 
+w2<- w2 %>%
+  select(AID,
+         H2TO19, 
+         ##alc consequences
+         H2TO25:H2TO29,
+         H2TO42, H2TO68) %>%
+  rename(w2_pastyralcusedays = H2TO19, 
+         w2_parentprobs = H2TO25,
+         w2_schoolprobs = H2TO26,
+         w2_friendprobs = H2TO27,
+         w2_dateprobs = H2TO28,
+         w2_regrets = H2TO29,
+         w2_accessalc = H2TO42, 
+         w2_accessdrug = H2TO68)
+
