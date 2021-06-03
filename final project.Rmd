@@ -75,6 +75,10 @@ dtotal<- dtotal %>%
 
 head(dtotal)
 
+saveRDS(dtotal, file = "addhealth.rds")
+# Restore the object
+d<-readRDS(file = "addhealth.rds")
+
 ```
 ##removed wave 2 from analyses 
 w2<- w2 %>%
