@@ -5,42 +5,41 @@ date: "5/18/2021"
 output: html_document
 ---
 
-
-
-
-```{r merge data}
-
+##Load Libraries
+```{r load libraries}
 library(here)
 library(rio)
 library(tidyverse)
-library(psych)
+library(lme4)
+library(sundry)
+library(broom.mixed)
+library(performance)
+
+
+```
+
+
+##Import Data
+```{r load data}
 
 
 w1<- import(here("Add Health", "raw data", "ICPSR_21600", "DS0001", "21600-0001-Data.rda"))
-w2<- import(here("Add Health", "raw data", "ICPSR_21600 2", "DS0005", "21600-0005-Data.rda"))
+#w2<- import(here("Add Health", "raw data", "ICPSR_21600 2", "DS0005", "21600-0005-Data.rda"))
 w3<- import(here("Add Health", "raw data", "ICPSR_21600 3", "DS0008", "21600-0008-Data.rda"))
 w4<- import(here("Add Health", "raw data", "ICPSR_21600 4", "DS0022", "21600-0022-Data.rda"))
 
 w1 <- w1 %>%
   select(AID,
-         H1GI8,
          H1GI20,
-    H1TO14, H1TO15, H1TO16,
-     H1TO20:H1TO24,
-    H1TO40, H1TO51, H1TO52) %>%
-   rename(race = H1GI8,
-         w1_grade = H1GI20,
-         w1_agefirstdrink = H1TO14, 
+         H1TO14,
+    H1TO15,
+    H1TO51, H1TO52) %>%
+   rename(
+         gradew1 = H1GI20,
          w1_pastyralcusedays = H1TO15, 
-         w1_drinksoccasion = H1TO16,
-         w1_parentprobs = H1TO20,
-         w1_schoolprobs = H1TO21,
-         w1_friendprobs = H1TO22,
-         w1_dateprobs = H1TO23,
-         w1_regrets = H1TO24,
-    w1_agefirstdrug = H1TO40, 
-    w1_accessalc = H1TO51, 
-    w1_accessdrug = H1TO52)
+    agefirstalc = H1TO14, 
+    accessalcw1 = H1TO51, 
+    accessdrugw1 = H1TO52)
   
 
 w3<- w3 %>%
@@ -49,50 +48,284 @@ w3<- w3 %>%
          ##nonprescription drug use 
          H3TO105A:H3TO105E) %>%
   rename(w3_pastyralcusedays = H3TO38, 
-         w3_sedative = H3TO105A,
-         w3_tranquil = H3TO105B,
-         w3_stimul = H3TO105C,
-         w3_painkill = H3TO105D,
-         w3_steroid = H3TO105E)
+         sedativew3 = H3TO105A,
+         tranquilw3 = H3TO105B,
+         stimulw3 = H3TO105C,
+         painkillw3 = H3TO105D,
+         steroidw3 = H3TO105E)
 
 w4 <- w4 %>%
   select(AID,
-         H4OD1Y,
-         H4TO35, 
-         H4TO63) %>%
-  rename(w4_pastyralcusedays = H4TO35,
-         w4_nmpdu = H4TO63)
+         H4OD1Y)
 
 
 newdata<- merge(w1, w3, by= "AID")
 dtotal <- merge(newdata, w4, by= "AID")
 
 
+
+```
+
+
+##Mutate Variables 
+```{r data management}
+
+
 dtotal<- dtotal %>%
   mutate(w1_age = 1995-H4OD1Y,
-         w3_age = 2001-H4OD1Y,
-         w4_age = 2008-H4OD1Y)
+         w3_age = 2001-H4OD1Y)
+        # w4_age = 2008-H4OD1Y)
 
 head(dtotal)
 
-saveRDS(dtotal, file = "addhealth.rds")
+test1 <-na.omit(dtotal)
+
+
+saveRDS(test1, file = "addhealth.rds")
 # Restore the object
-d<-readRDS(file = "addhealth.rds")
+d <-readRDS(file = "addhealth.rds")
+
+mean(is.na(d))
+
+d <- d %>%
+  select(-H4OD1Y) %>%
+  mutate(across(matches("^w\\d_"),
+                as.character)) %>%
+  pivot_longer(matches("^w\\d_"),
+               names_to = c("wave", "var"),
+               names_sep = "_") %>%
+  pivot_wider(names_from = "var",
+              values_from = "value") %>%
+  mutate(wave = (parse_number(wave)-1)*3) %>%
+ mutate(age = as.numeric(age),
+         pastyralcusedays = factor(pastyralcusedays))
+
+
+d$pastyralc <- 
+  ifelse(d$pastyralcusedays ==  "(0) (0) None (skip to Q.50)", 0, 
+     ifelse(d$pastyralcusedays == "(1) (1) Every day/almost every day", 3, 
+     ifelse(d$pastyralcusedays == "(1) (1) 1 or 2 days in past 12 months", 1, 
+      ifelse(d$pastyralcusedays == "(2) (2) Once a month or less (3-12 times in past 12 months)", 1,
+      ifelse(d$pastyralcusedays == "(2) (2) 3-5 days/week", 3,
+      ifelse(d$pastyralcusedays == "(3) (3) 2 or 3 days a month", 2,
+      ifelse(d$pastyralcusedays == "(3) (3) 1 or 2 days/week", 3,
+       ifelse(d$pastyralcusedays == "(4) (4) 2 or 3 days/month", 2,
+      ifelse(d$pastyralcusedays == "(4) (4) 1 or 2 days a week", 3,
+      ifelse(d$pastyralcusedays == "(5) (5) Once a month or less (3-12 times in past 12 months)", 1,
+      ifelse(d$pastyralcusedays == "(5) (5) 3-5 days a week", 3, 
+      ifelse(d$pastyralcusedays ==  "(6) (6) Every day/almost every day", 3, 
+       ifelse(d$pastyralcusedays == "(6) (6) 1 or 2 days in past 12 months",1,
+      ifelse(d$pastyralcusedays ==  "(7) (7) Never (skip to Q.29)", 0, 99))))))))))))))
+
+(d$pastyralc)
+levels(d$gradew1)
+
+levels(d$agefirstalc)
+
+d$agealcuse <-ifelse(d$agefirstalc ==  "(01) (1) 1 year" , 1,
+      ifelse(d$agefirstalc ==  "(02) (2) 2 years", 1,
+      ifelse(d$agefirstalc ==  "(03) (3) 3 years", 1,
+      ifelse(d$agefirstalc ==  "(04) (4) 4 years", 1,
+      ifelse(d$agefirstalc ==  "(05) (5) 5 years", 1,
+      ifelse(d$agefirstalc == "(06) (6) 6 years", 1, 
+      ifelse(d$agefirstalc == "(07) (7) 7 years", 2,
+       ifelse(d$agefirstalc == "(08) (8) 8 years", 2,
+      ifelse(d$agefirstalc == "(09) (9) 9 years", 2,    
+      ifelse(d$agefirstalc =="(10) (10) 10 years", 2,
+      ifelse(d$agefirstalc == "(11) (11) 11 years", 2,
+      ifelse(d$agefirstalc == "(12) (12) 12 years", 3,
+      ifelse(d$agefirstalc == "(13) (13) 13 years", 3,
+      ifelse(d$agefirstalc == "(14) (14) 14 years", 3,
+      ifelse(d$agefirstalc == "(15) (15) 15 years", 4,
+      ifelse(d$agefirstalc == "(16) (16) 16 years", 4, 
+      ifelse(d$agefirstalc == "(17) (17) 17 years", 4, 
+      ifelse(d$agefirstalc =="(18) (18) 18 years", 5, 
+     ifelse(d$agefirstalc == "(19) (19) 19 years and older", 5,99)))))))))))))))))))
+
+d$agealcuse
+
+d$druguse <- ifelse(d$tranquilw3 == "(1) (1) Yes", 1,
+                   ifelse(d$stimulw3 == "(1) (1) Yes", 1,
+                  ifelse(d$painkillw3 == "(1) (1) Yes", 1,
+                   ifelse(d$steroidw3 == "(1) (1) Yes", 1,
+                   ifelse(d$sedativew3 == "(1) (1) Yes", 1, 0)))))
+
+d$accesssubs <- ifelse(d$accessalcw1 == "(1) (1) Yes", 1,
+                   ifelse(d$accessdrugw1 == "(1) (1) Yes", 1, 0))
+
+add <- d %>%
+  mutate(pastyralc = factor(pastyralc),
+         druguse = factor(druguse),
+         accesssubs = factor(accesssubs),
+         agealcuse = factor(agealcuse)) %>%
+  select(-agefirstalc,
+         -pastyralcusedays)
+
+as.numeric(add$age)
+str(add)
 
 ```
-##removed wave 2 from analyses 
-w2<- w2 %>%
-  select(AID,
-         H2TO19, 
-         ##alc consequences
-         H2TO25:H2TO29,
-         H2TO42, H2TO68) %>%
-  rename(w2_pastyralcusedays = H2TO19, 
-         w2_parentprobs = H2TO25,
-         w2_schoolprobs = H2TO26,
-         w2_friendprobs = H2TO27,
-         w2_dateprobs = H2TO28,
-         w2_regrets = H2TO29,
-         w2_accessalc = H2TO42, 
-         w2_accessdrug = H2TO68)
+
+##Descriptive Stats 
+```{r descriptives}
+
+wave3age<- add %>% 
+  filter(wave == 6) %>% 
+  mutate(meanwave3= mean(age))
+
+wave1age<- add %>% 
+  filter(wave == 0) %>% 
+  mutate(meanwave1 = mean(age))
+
+wave1alcuse<- add %>% 
+  filter(wave == 0) %>% 
+  count(pastyralc)
+
+wave3alcuse<- add %>% 
+  filter(wave == 6) %>% 
+  count(pastyralc)
+
+##Describe 
+psych::describe(add)
+summary(add)
+
+
+psych::describe(wave1alcuse)
+psych::describe(wave3alcuse)
+str(add)
+psych::describe(wave3age)
+summary(wave1age)
+
+
+
+
+##Plot Descriptives 
+
+ggplot(data=add, aes(pastyralc)) + 
+  geom_histogram(stat = "count")
+
+ggplot(data=add, aes(age)) + 
+  geom_histogram()
+
+ggplot(data=add, aes(agealcuse)) + 
+  geom_histogram(stat = "count")
+
+
+ggplot(data=add, aes(druguse)) + 
+  geom_histogram(stat = "count")
+
+ggplot(data=add, aes(gradew1)) + 
+  geom_histogram(stat = "count")
+    
+ggplot(data=add, aes(accessalcw1)) + 
+  geom_histogram(stat = "count")   
+
+ggplot(data=add, aes(accessdrugw1)) + 
+  geom_histogram(stat = "count")
+
+
+ggplot(data=add, aes(accesssubs)) + 
+  geom_histogram(stat = "count")
+
+
+add %>% 
+  filter(wave == 6) %>% 
+  count(pastyralc)
+
+```
+
+##I couldn't get imputation models to converge; Listwise deletion was done prior to restructuring data 
+```{r imputation, eval=FALSE, warning=FALSE, include=FALSE}
+#imp <- mice(add, m = 20, nnet.MaxNWts = 2000)
+#imp <- mice(data = d, nnet.MaxNWts = 2000, seed = 123456)
+#imp
+
+```
+
+
+
+##Build Models to Address RQs
+```{r Build and run models}
+
+m1<- glmer(pastyralc ~  wave + accesssubs + (1|AID), data = add,
+           family = binomial(link = "logit"),
+           glmerControl(optimizer = "bobyqa"))
+
+summary(m1)
+
+m2<- glmer(pastyralc ~  wave + accesssubs + (wave|AID), data = add,
+           family = binomial(link = "logit"),
+           glmerControl(optimizer = "bobyqa"))
+
+summary(m2)
+
+##model comparison 
+anova(m1, m2)
+
+
+
+
+```
+
+
+
+##Explore models further  
+```{r explore models}
+
+m1_tidied <- tidy(m1, conf.int = TRUE)
+m1_tidied
+
+m2_tidied <- tidy(m2, conf.int = TRUE)
+m2_tidied
+
+
+
+##Plot  
+
+first_three <- add %>% 
+  ungroup() %>%
+  filter(AID %in% 57101310:57120046)
+first_three %>% 
+  mutate(model_pred = predict(m2, newdata= first_three))
+first_three %>% 
+  mutate(model_pred = predict(m2, newdata=first_three)) %>% 
+  ggplot(aes(wave, pastyralc, color = accesssubs)) +
+  geom_point() +
+  geom_line() +
+  geom_line(aes(y = model_pred)) +
+  facet_wrap(~AID)
+
+
+```
+
+
+##Plot Models 
+```{r plot models}
+
+
+##Fixed Effects 
+
+models <- bind_rows(
+  tidy(m1, effects = "fixed", conf.int = TRUE),
+  tidy(m2, effects = "fixed", conf.int = TRUE),
+  .id = "model") %>%
+  mutate(model = as.numeric(model))
+models
+
+
+pd <- position_dodge(0.5)
+ggplot(models, aes(estimate, term, color = factor(model))) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), 
+                 position = pd,
+                 height = 0.2) +
+  geom_point(position = pd)
+
+
+
+
+
+```
+
+
+
 
